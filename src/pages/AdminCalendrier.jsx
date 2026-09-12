@@ -221,7 +221,7 @@ export default function AdminCalendrier() {
       {events.map((ev) => {
         const open = expandedId === ev.id;
         const form = forms[ev.id];
-        const insc = inscriptionsFor(ev.id);
+        const insc = form ? inscriptionsFor(form.id) : [];
         const eventPostes = form ? postesFor(form.id) : [];
         const presentCount = insc.filter((i) => presences[i.id]?.present).length;
 
