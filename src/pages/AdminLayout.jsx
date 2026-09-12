@@ -23,6 +23,9 @@ export default function AdminLayout() {
         <NavLink to="recap" className={({ isActive }) => (isActive ? "active" : "")}>
           Récapitulatif
         </NavLink>
+        <NavLink to="utilisateurs" className={({ isActive }) => (isActive ? "active" : "")}>
+          Administrateurs
+        </NavLink>
       </div>
       <Outlet />
     </div>
