@@ -28,8 +28,20 @@ export default function AdminUsers() {
     setSubmitting(false);
 
     if (fnError || data?.error) {
+      // Quand la fonction renvoie une erreur (ex. 403), supabase-js ne
+      // remplit pas toujours "data" : on va chercher le vrai message dans
+      // le corps de la réponse HTTP pour afficher un message clair.
+      let serverMessage = data?.error;
+      if (!serverMessage && fnError?.context?.json) {
+        try {
+          const body = await fnError.context.json();
+          serverMessage = body?.error;
+        } catch {
+          // pas de corps JSON exploitable, on garde le message par défaut
+        }
+      }
       setError(
-        data?.error ||
+        serverMessage ||
           fnError?.message ||
           "Échec de la création du compte. Vérifiez que la fonction « create-admin » est bien déployée sur Supabase."
       );
