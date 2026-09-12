@@ -5,13 +5,16 @@
 // provisoire choisis à la main (pas d'email d'invitation envoyé) — sans
 // jamais exposer la clé service_role au navigateur (elle ne vit que côté
 // serveur, ici).
-//
-// Déploiement : Supabase Dashboard > Edge Functions > Deploy a new function,
-// nommez-la "create-admin", collez ce fichier. SUPABASE_URL et
-// SUPABASE_SERVICE_ROLE_KEY sont fournies automatiquement par Supabase à
-// l'exécution, aucun secret à ajouter manuellement.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// Seules ces adresses email sont autorisées à créer de nouveaux comptes
+// administrateurs. Pour ajouter ou retirer une personne, modifiez cette
+// liste puis redéployez la fonction (Supabase > Edge Functions > create-admin).
+const ALLOWED_CREATORS = [
+  "hugo.annemassenatation@gmail.com",
+  "vincent.annemassenatation@gmail.com",
+];
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -36,8 +39,6 @@ Deno.serve(async (req) => {
       return json({ error: "Non authentifié." }, 401);
     }
 
-    // 1. Vérifie que l'appelant est bien un administrateur déjà connecté
-    //    (on utilise sa propre session, avec la clé anon — pas la service_role).
     const callerClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
@@ -52,7 +53,11 @@ Deno.serve(async (req) => {
       return json({ error: "Non authentifié." }, 401);
     }
 
-    // 2. Récupère l'email et le mot de passe provisoire choisis
+    const callerEmail = caller.email?.toLowerCase().trim();
+    if (!callerEmail || !ALLOWED_CREATORS.includes(callerEmail)) {
+      return json({ error: "Vous n'êtes pas autorisé à créer de nouveaux comptes administrateurs." }, 403);
+    }
+
     const body = await req.json().catch(() => null);
     const email = body?.email?.trim();
     const password = body?.password;
@@ -64,10 +69,6 @@ Deno.serve(async (req) => {
       return json({ error: "Le mot de passe doit contenir au moins 6 caractères." }, 400);
     }
 
-    // 3. Crée le compte avec un client "admin" (clé service_role, jamais
-    //    transmise au navigateur — elle n'existe que dans cette fonction,
-    //    côté serveur Supabase). email_confirm: true active le compte tout
-    //    de suite, sans email de confirmation à cliquer.
     const adminClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
