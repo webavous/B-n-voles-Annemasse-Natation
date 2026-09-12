@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { fmtDateLong } from "../lib/format";
+import { fmtDateRange, MOMENTS, momentRank, posteCreneauLabel } from "../lib/format";
 
 export default function AdminCalendrier() {
   const [events, setEvents] = useState([]);
@@ -47,7 +47,14 @@ export default function AdminCalendrier() {
   }
 
   function postesFor(formulaireId) {
-    return postes.filter((p) => p.formulaire_id === formulaireId);
+    return postes
+      .filter((p) => p.formulaire_id === formulaireId)
+      .slice()
+      .sort((a, b) => {
+        const d = (a.date || "").localeCompare(b.date || "");
+        if (d !== 0) return d;
+        return momentRank(a.moment) - momentRank(b.moment);
+      });
   }
   function inscriptionsFor(formulaireId) {
     return inscriptions.filter((i) => i.formulaire_id === formulaireId);
@@ -62,6 +69,7 @@ export default function AdminCalendrier() {
     const { error } = await supabase.from("evenements").insert({
       titre: fd.get("titre"),
       date: fd.get("date"),
+      date_fin: fd.get("date_fin") || null,
       lieu: fd.get("lieu"),
       description: fd.get("description"),
       visible: true,
@@ -81,6 +89,7 @@ export default function AdminCalendrier() {
       .update({
         titre: fd.get("titre"),
         date: fd.get("date"),
+        date_fin: fd.get("date_fin") || null,
         lieu: fd.get("lieu"),
         description: fd.get("description"),
         visible: fd.get("visible") === "on",
@@ -130,9 +139,13 @@ export default function AdminCalendrier() {
       showToast("Indiquez un nom de poste et un nombre de places valide.");
       return;
     }
-    const { error } = await supabase
-      .from("postes_benevolat")
-      .insert({ formulaire_id: formId, nom: fd.get("nom"), places_totales: places });
+    const { error } = await supabase.from("postes_benevolat").insert({
+      formulaire_id: formId,
+      nom: fd.get("nom"),
+      places_totales: places,
+      date: fd.get("date") || null,
+      moment: fd.get("moment") || null,
+    });
     if (error) { showToast("Échec de l'ajout du poste."); return; }
     e.target.reset();
     showToast("Poste ajouté.");
@@ -180,9 +193,13 @@ export default function AdminCalendrier() {
                 <input type="text" name="titre" required placeholder="Ex. Interclub" />
               </div>
               <div className="field">
-                <label>Date *</label>
+                <label>Date de début *</label>
                 <input type="date" name="date" required />
               </div>
+            </div>
+            <div className="field">
+              <label>Date de fin (si l'événement dure plusieurs jours)</label>
+              <input type="date" name="date_fin" />
             </div>
             <div className="field">
               <label>Lieu</label>
@@ -217,7 +234,7 @@ export default function AdminCalendrier() {
                   {ev.visible === false && <span className="muted" style={{ fontSize: ".75rem" }}> (masqué)</span>}
                 </h3>
                 <div className="sub">
-                  {fmtDateLong(ev.date)}
+                  {fmtDateRange(ev.date, ev.date_fin)}
                   {ev.lieu ? ` · ${ev.lieu}` : ""}
                 </div>
               </div>
@@ -244,9 +261,13 @@ export default function AdminCalendrier() {
                         <input type="text" name="titre" defaultValue={ev.titre} />
                       </div>
                       <div className="field">
-                        <label>Date</label>
+                        <label>Date de début</label>
                         <input type="date" name="date" defaultValue={ev.date} />
                       </div>
+                    </div>
+                    <div className="field">
+                      <label>Date de fin (si plusieurs jours)</label>
+                      <input type="date" name="date_fin" defaultValue={ev.date_fin || ""} />
                     </div>
                     <div className="field">
                       <label>Lieu</label>
@@ -304,12 +325,19 @@ export default function AdminCalendrier() {
 
                       <div style={{ marginTop: 16 }}>
                         <label style={{ marginBottom: 8 }}>Postes &amp; places nécessaires</label>
+                        {ev.date_fin && (
+                          <p className="muted" style={{ fontSize: ".8rem", margin: "0 0 10px" }}>
+                            Cet événement dure plusieurs jours : indiquez pour chaque poste le jour et le moment
+                            concernés (ex. « Chronométrage » le samedi matin, un autre poste le samedi après-midi…).
+                          </p>
+                        )}
                         {eventPostes.length > 0 && (
                           <div className="table-wrap" style={{ marginBottom: 10 }}>
                             <table>
                               <thead>
                                 <tr>
                                   <th>Poste</th>
+                                  <th>Créneau</th>
                                   <th>Places</th>
                                   <th></th>
                                 </tr>
@@ -318,9 +346,11 @@ export default function AdminCalendrier() {
                                 {eventPostes.map((p) => {
                                   const t = taken(p.id);
                                   const full = t >= p.places_totales;
+                                  const creneau = posteCreneauLabel(p);
                                   return (
                                     <tr key={p.id}>
                                       <td>{p.nom}</td>
+                                      <td>{creneau || <span className="muted">—</span>}</td>
                                       <td className="mono">
                                         {t} / {p.places_totales}{" "}
                                         {full && (
@@ -355,7 +385,21 @@ export default function AdminCalendrier() {
                             <label>Nom du poste</label>
                             <input type="text" name="nom" required placeholder="Ex. Chronométrage" />
                           </div>
-                          <div className="field" style={{ width: 120, marginBottom: 0 }}>
+                          <div className="field" style={{ width: 150, marginBottom: 0 }}>
+                            <label>Jour (optionnel)</label>
+                            <input type="date" name="date" min={ev.date} max={ev.date_fin || ev.date} />
+                          </div>
+                          <div className="field" style={{ width: 160, marginBottom: 0 }}>
+                            <label>Moment</label>
+                            <select name="moment" defaultValue="Journée entière">
+                              {MOMENTS.map((m) => (
+                                <option key={m} value={m}>
+                                  {m}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="field" style={{ width: 100, marginBottom: 0 }}>
                             <label>Places</label>
                             <input type="number" min="1" name="places" required placeholder="4" />
                           </div>
@@ -389,7 +433,8 @@ export default function AdminCalendrier() {
                         </thead>
                         <tbody>
                           {insc.map((i) => {
-                            const posteNom = postes.find((p) => p.id === i.poste_id)?.nom;
+                            const poste = postes.find((p) => p.id === i.poste_id);
+                            const creneau = poste ? posteCreneauLabel(poste) : "";
                             const pres = presences[i.id]?.present;
                             return (
                               <tr key={i.id}>
@@ -402,7 +447,18 @@ export default function AdminCalendrier() {
                                   {i.email}
                                 </td>
                                 <td>
-                                  {posteNom ? <span className="pill pill-group">{posteNom}</span> : <span className="muted">—</span>}
+                                  {poste ? (
+                                    <>
+                                      <span className="pill pill-group">{poste.nom}</span>
+                                      {creneau && (
+                                        <div className="muted" style={{ fontSize: ".72rem", marginTop: 3 }}>
+                                          {creneau}
+                                        </div>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <span className="muted">—</span>
+                                  )}
                                 </td>
                                 <td>{i.metier_competence || "—"}</td>
                                 <td>
