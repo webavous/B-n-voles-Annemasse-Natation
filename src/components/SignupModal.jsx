@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { fmtDateLong } from "../lib/format";
+import { fmtDateRange, posteCreneauLabel } from "../lib/format";
 
 export default function SignupModal({ event, form, postes, adherents, onClose }) {
   const [nom, setNom] = useState("");
@@ -93,7 +93,7 @@ export default function SignupModal({ event, form, postes, adherents, onClose })
           <>
             <h3>Je me porte bénévole</h3>
             <p className="modal-sub">
-              {event.titre} &middot; {fmtDateLong(event.date)}
+              {event.titre} &middot; {fmtDateRange(event.date, event.date_fin)}
               {form.besoins ? <><br />{form.besoins}</> : null}
             </p>
             <form onSubmit={handleSubmit}>
@@ -136,17 +136,21 @@ export default function SignupModal({ event, form, postes, adherents, onClose })
                   <label>Poste souhaité *</label>
                   <select value={posteId} onChange={(e) => setPosteId(e.target.value)} required>
                     <option value="">— Choisir un poste —</option>
-                    {postes.map((p) => (
-                      <option key={p.id} value={p.id} disabled={p.places_restantes <= 0}>
-                        {p.nom} (
-                        {p.places_restantes <= 0
-                          ? "complet"
-                          : `${p.places_restantes} place${p.places_restantes > 1 ? "s" : ""} restante${
-                              p.places_restantes > 1 ? "s" : ""
-                            }`}
-                        )
-                      </option>
-                    ))}
+                    {postes.map((p) => {
+                      const creneau = posteCreneauLabel(p);
+                      const label = creneau ? `${creneau} — ${p.nom}` : p.nom;
+                      return (
+                        <option key={p.id} value={p.id} disabled={p.places_restantes <= 0}>
+                          {label} (
+                          {p.places_restantes <= 0
+                            ? "complet"
+                            : `${p.places_restantes} place${p.places_restantes > 1 ? "s" : ""} restante${
+                                p.places_restantes > 1 ? "s" : ""
+                              }`}
+                          )
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               )}
