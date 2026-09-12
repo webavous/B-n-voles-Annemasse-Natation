@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
-import { fmtDateLong, fmtDay, fmtMonth, isPast } from "../lib/format";
+import { fmtDateRange, fmtDay, fmtMonth, isPast, momentRank } from "../lib/format";
 import SignupModal from "../components/SignupModal.jsx";
 import Brand from "../components/Brand.jsx";
 
@@ -35,7 +35,14 @@ export default function PublicHome() {
   }
 
   function postesFor(formulaireId) {
-    return postesDispo.filter((p) => p.formulaire_id === formulaireId);
+    return postesDispo
+      .filter((p) => p.formulaire_id === formulaireId)
+      .slice()
+      .sort((a, b) => {
+        const d = (a.date || "").localeCompare(b.date || "");
+        if (d !== 0) return d;
+        return momentRank(a.moment) - momentRank(b.moment);
+      });
   }
 
   function hasAvailability(formulaireId) {
@@ -88,7 +95,7 @@ export default function PublicHome() {
                       <div className="event-body">
                         <h3>{ev.titre}</h3>
                         <div className="event-meta">
-                          {fmtDateLong(ev.date)}
+                          {fmtDateRange(ev.date, ev.date_fin)}
                           {ev.lieu ? ` · ${ev.lieu}` : ""}
                         </div>
                         {ev.description && <div className="event-desc">{ev.description}</div>}
