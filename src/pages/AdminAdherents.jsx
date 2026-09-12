@@ -1,7 +1,27 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
-const GROUPES = ["Ecole de natation", "Benjamins", "Juniors", "Maîtres"];
+const GROUPES = [
+  "Ecole de natation",
+  "Loisir jeune",
+  "Loisir Ado",
+  "Loisir lycée",
+  "Avenir Pré compétition",
+  "Avenir",
+  "Benjamin",
+  "Junior jaune",
+  "Junior Bleu",
+  "Maitre",
+  "Adulte perf",
+  "Ado et adulte debutant",
+  "Arti poussine",
+  "Arti avenir",
+  "Arti compétition",
+  "Arti maitre",
+  "Water-polo Jeune",
+  "Water-polo loisir",
+  "Water-polo N3",
+];
 
 export default function AdminAdherents() {
   const [adherents, setAdherents] = useState([]);
