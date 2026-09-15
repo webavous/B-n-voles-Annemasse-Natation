@@ -336,7 +336,7 @@ export default function AdminCalendrier() {
                           </p>
                         )}
                         {eventPostes.length > 0 && (
-                          <div className="table-wrap" style={{ marginBottom: 10 }}>
+                          <div className="table-wrap table-responsive" style={{ marginBottom: 10 }}>
                             <table>
                               <thead>
                                 <tr>
@@ -353,9 +353,9 @@ export default function AdminCalendrier() {
                                   const creneau = posteCreneauLabel(p);
                                   return (
                                     <tr key={p.id}>
-                                      <td>{p.nom}</td>
-                                      <td>{creneau || <span className="muted">—</span>}</td>
-                                      <td className="mono">
+                                      <td data-label="Poste">{p.nom}</td>
+                                      <td data-label="Créneau">{creneau || <span className="muted">—</span>}</td>
+                                      <td className="mono" data-label="Places">
                                         {t} / {p.places_totales}{" "}
                                         {full && (
                                           <span className="pill" style={{ background: "var(--badge-closed-bg)", color: "var(--badge-closed-text)" }}>
@@ -363,7 +363,7 @@ export default function AdminCalendrier() {
                                           </span>
                                         )}
                                       </td>
-                                      <td>
+                                      <td data-label="">
                                         <button className="btn btn-danger btn-sm" onClick={() => handleDeletePoste(p.id)}>
                                           Supprimer
                                         </button>
@@ -423,7 +423,7 @@ export default function AdminCalendrier() {
                       Aucune inscription pour cet événement.
                     </p>
                   ) : (
-                    <div className="table-wrap">
+                    <div className="table-wrap table-responsive">
                       <table>
                         <thead>
                           <tr>
@@ -442,15 +442,15 @@ export default function AdminCalendrier() {
                             const pres = presences[i.id]?.present;
                             return (
                               <tr key={i.id}>
-                                <td>
+                                <td data-label="Nom">
                                   {i.prenom} {i.nom}
                                 </td>
-                                <td className="mono" style={{ fontSize: ".78rem" }}>
+                                <td className="mono" style={{ fontSize: ".78rem" }} data-label="Contact">
                                   {i.telephone || "—"}
                                   <br />
                                   {i.email}
                                 </td>
-                                <td>
+                                <td data-label="Poste">
                                   {poste ? (
                                     <>
                                       <span className="pill pill-group">{poste.nom}</span>
@@ -464,8 +464,8 @@ export default function AdminCalendrier() {
                                     <span className="muted">—</span>
                                   )}
                                 </td>
-                                <td>{i.metier_competence || "—"}</td>
-                                <td>
+                                <td data-label="Métier / compétence">{i.metier_competence || "—"}</td>
+                                <td data-label="Rattaché à">
                                   {(() => {
                                     const a = adherents.find((x) => x.id === i.adherent_id);
                                     return a ? (
@@ -479,7 +479,7 @@ export default function AdminCalendrier() {
                                     );
                                   })()}
                                 </td>
-                                <td>
+                                <td data-label="Présent">
                                   <label className="checkbox-row">
                                     <input
                                       type="checkbox"
