@@ -45,6 +45,7 @@ export default function AdminRecap() {
           nom: insc2.nom,
           prenom: insc2.prenom,
           groupe: adherent?.groupe || "—",
+          rattacheA: adherent ? `${adherent.prenom} ${adherent.nom}` : "—",
           count: 0,
           events: [],
         };
@@ -60,12 +61,13 @@ export default function AdminRecap() {
   function handleExport() {
     const data = rows.map((r) => ({
       "Bénévole": `${r.prenom} ${r.nom}`,
+      "Rattaché à": r.rattacheA,
       Groupe: r.groupe,
       "Nb. événements": r.count,
       "Détail des événements": r.events.join(", "),
     }));
     const ws = XLSX.utils.json_to_sheet(data);
-    ws["!cols"] = [{ wch: 24 }, { wch: 22 }, { wch: 14 }, { wch: 60 }];
+    ws["!cols"] = [{ wch: 24 }, { wch: 24 }, { wch: 22 }, { wch: 14 }, { wch: 60 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Récapitulatif");
     const today = new Date().toISOString().slice(0, 10);
@@ -97,6 +99,7 @@ export default function AdminRecap() {
             <thead>
               <tr>
                 <th>Bénévole</th>
+                <th>Rattaché à</th>
                 <th>Groupe</th>
                 <th>Nb. événements</th>
                 <th>Détail</th>
@@ -108,6 +111,7 @@ export default function AdminRecap() {
                   <td>
                     {r.prenom} {r.nom}
                   </td>
+                  <td>{r.rattacheA}</td>
                   <td>
                     <span className="pill pill-group">{r.groupe}</span>
                   </td>
