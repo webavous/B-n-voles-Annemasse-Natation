@@ -71,3 +71,11 @@ export function posteCreneauLabel(poste) {
   if (poste.moment && poste.moment !== "Journée entière") parts.push(poste.moment);
   return parts.join(" · ");
 }
+
+// Clé identifiant un créneau (jour + moment) — deux postes qui partagent la
+// même clé se déroulent en même temps, donc une personne ne peut en choisir
+// qu'un seul parmi eux (sinon ça fausse le nombre de places nécessaires).
+export function posteCreneauKey(poste) {
+  if (!poste) return "";
+  return `${poste.date || ""}|${poste.moment || ""}`;
+}
