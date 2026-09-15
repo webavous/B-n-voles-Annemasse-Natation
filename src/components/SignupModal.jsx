@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { fmtDateRange, posteCreneauLabel } from "../lib/format";
+import { fmtDateRange, posteCreneauLabel, posteCreneauKey } from "../lib/format";
 
 export default function SignupModal({ event, form, postes, adherents, onClose }) {
   const [nom, setNom] = useState("");
@@ -25,8 +25,20 @@ export default function SignupModal({ event, form, postes, adherents, onClose })
 
   const anyAvailable = !postes.length || postes.some((p) => p.places_restantes > 0);
 
-  function togglePoste(id) {
-    setPosteIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  function togglePoste(poste) {
+    setPosteIds((prev) => {
+      if (prev.includes(poste.id)) {
+        return prev.filter((x) => x !== poste.id);
+      }
+      // Un seul poste par créneau (même jour + même moment) : on retire
+      // d'abord tout autre poste déjà choisi sur ce même créneau.
+      const key = posteCreneauKey(poste);
+      const withoutSameCreneau = prev.filter((id) => {
+        const other = postes.find((x) => x.id === id);
+        return !other || posteCreneauKey(other) !== key;
+      });
+      return [...withoutSameCreneau, poste.id];
+    });
   }
 
   async function handleSubmit(e) {
@@ -144,7 +156,7 @@ export default function SignupModal({ event, form, postes, adherents, onClose })
               </div>
               {postes.length > 0 && (
                 <div className="field">
-                  <label>Poste(s) souhaité(s) * — vous pouvez en cocher plusieurs (ex. matin et après-midi)</label>
+                  <label>Poste(s) souhaité(s) * — un seul par créneau (vous pouvez en choisir un le matin, un l'après-midi, un le soir…)</label>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {postes.map((p) => {
                       const creneau = posteCreneauLabel(p);
@@ -156,7 +168,7 @@ export default function SignupModal({ event, form, postes, adherents, onClose })
                             type="checkbox"
                             checked={posteIds.includes(p.id)}
                             disabled={full}
-                            onChange={() => togglePoste(p.id)}
+                            onChange={() => togglePoste(p)}
                           />
                           {label}{" "}
                           <span className="muted" style={{ fontSize: ".78rem" }}>
