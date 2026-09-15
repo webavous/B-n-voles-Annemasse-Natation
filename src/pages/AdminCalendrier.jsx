@@ -23,8 +23,12 @@ export default function AdminCalendrier() {
     setTimeout(() => setToast(null), 2600);
   }
 
-  async function loadAll() {
-    setLoading(true);
+  // silent = true : on recharge les données sans remplacer toute la page par
+  // "Chargement…" — utile après une petite action (cocher une présence, par
+  // exemple) pour ne pas faire disparaître/réapparaître la liste et donc ne
+  // pas faire remonter la page en haut de l'écran.
+  async function loadAll({ silent = false } = {}) {
+    if (!silent) setLoading(true);
     const [{ data: evs }, { data: fs }, { data: ps }, { data: insc }, { data: pres }, { data: ads }] = await Promise.all([
       supabase.from("evenements").select("*").order("date", { ascending: true }),
       supabase.from("formulaires_benevolat").select("*"),
@@ -43,7 +47,7 @@ export default function AdminCalendrier() {
     (pres || []).forEach((p) => (presMap[p.inscription_id] = p));
     setPresences(presMap);
     setAdherents(ads || []);
-    setLoading(false);
+    if (!silent) setLoading(false);
   }
 
   function postesFor(formulaireId) {
@@ -78,7 +82,7 @@ export default function AdminCalendrier() {
     e.target.reset();
     setNewEventOpen(false);
     showToast("Événement créé.");
-    loadAll();
+    loadAll({ silent: true });
   }
 
   async function handleEditEvent(e, eventId) {
@@ -97,21 +101,21 @@ export default function AdminCalendrier() {
       .eq("id", eventId);
     if (error) { showToast("Échec de la mise à jour."); return; }
     showToast("Événement mis à jour.");
-    loadAll();
+    loadAll({ silent: true });
   }
 
   async function handleDeleteEvent(eventId) {
     await supabase.from("evenements").delete().eq("id", eventId);
     setExpandedId(null);
     showToast("Événement supprimé.");
-    loadAll();
+    loadAll({ silent: true });
   }
 
   async function handleCreateForm(eventId) {
     const { error } = await supabase.from("formulaires_benevolat").insert({ evenement_id: eventId, statut: "ferme" });
     if (error) { showToast("Échec de la création du formulaire."); return; }
     showToast("Formulaire créé.");
-    loadAll();
+    loadAll({ silent: true });
   }
 
   async function handleToggleForm(form) {
@@ -120,7 +124,7 @@ export default function AdminCalendrier() {
       .update({ statut: form.statut === "ouvert" ? "ferme" : "ouvert" })
       .eq("id", form.id);
     showToast(form.statut === "ouvert" ? "Inscriptions fermées." : "Inscriptions ouvertes !");
-    loadAll();
+    loadAll({ silent: true });
   }
 
   async function handleSaveBesoins(e, form) {
@@ -128,7 +132,7 @@ export default function AdminCalendrier() {
     const fd = new FormData(e.target);
     await supabase.from("formulaires_benevolat").update({ besoins: fd.get("besoins") }).eq("id", form.id);
     showToast("Notes enregistrées.");
-    loadAll();
+    loadAll({ silent: true });
   }
 
   async function handleAddPoste(e, formId) {
@@ -149,13 +153,13 @@ export default function AdminCalendrier() {
     if (error) { showToast("Échec de l'ajout du poste."); return; }
     e.target.reset();
     showToast("Poste ajouté.");
-    loadAll();
+    loadAll({ silent: true });
   }
 
   async function handleDeletePoste(posteId) {
     await supabase.from("postes_benevolat").delete().eq("id", posteId);
     showToast("Poste supprimé.");
-    loadAll();
+    loadAll({ silent: true });
   }
 
   async function handleTogglePresence(inscriptionId, checked) {
@@ -170,7 +174,7 @@ export default function AdminCalendrier() {
         .from("presences")
         .insert({ inscription_id: inscriptionId, present: checked, date_pointage: new Date().toISOString() });
     }
-    loadAll();
+    loadAll({ silent: true });
   }
 
   if (loading) return <p className="muted">Chargement…</p>;
