@@ -8,7 +8,7 @@ export default function SignupModal({ event, form, postes, adherents, onClose })
   const [telephone, setTelephone] = useState("");
   const [email, setEmail] = useState("");
   const [metier, setMetier] = useState("");
-  const [posteId, setPosteId] = useState("");
+  const [posteIds, setPosteIds] = useState([]);
   const [adherentId, setAdherentId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -25,28 +25,39 @@ export default function SignupModal({ event, form, postes, adherents, onClose })
 
   const anyAvailable = !postes.length || postes.some((p) => p.places_restantes > 0);
 
+  function togglePoste(id) {
+    setPosteIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
 
-    const selectedPoste = postes.find((p) => p.id === posteId);
-    if (postes.length && selectedPoste && selectedPoste.places_restantes <= 0) {
-      setError("Ce poste vient d'être complété par quelqu'un d'autre — choisissez-en un autre.");
+    if (postes.length && posteIds.length === 0) {
+      setError("Choisissez au moins un poste (vous pouvez en cocher plusieurs).");
+      return;
+    }
+    const stillFull = posteIds.some((id) => {
+      const p = postes.find((x) => x.id === id);
+      return p && p.places_restantes <= 0;
+    });
+    if (stillFull) {
+      setError("Un des postes choisis vient d'être complété par quelqu'un d'autre — décochez-le et réessayez.");
       return;
     }
 
     setSubmitting(true);
-    const adherent = (adherents || []).find((a) => a.id === adherentId);
-    const { error: insertError } = await supabase.from("inscriptions_benevoles").insert({
+    const baseRow = {
       formulaire_id: form.id,
-      poste_id: posteId || null,
       nom,
       prenom,
       telephone,
       email,
       metier_competence: metier,
       adherent_id: adherentId || null,
-    });
+    };
+    const rows = postes.length ? posteIds.map((pid) => ({ ...baseRow, poste_id: pid })) : [{ ...baseRow, poste_id: null }];
+    const { error: insertError } = await supabase.from("inscriptions_benevoles").insert(rows);
     setSubmitting(false);
 
     if (insertError) {
@@ -133,25 +144,34 @@ export default function SignupModal({ event, form, postes, adherents, onClose })
               </div>
               {postes.length > 0 && (
                 <div className="field">
-                  <label>Poste souhaité *</label>
-                  <select value={posteId} onChange={(e) => setPosteId(e.target.value)} required>
-                    <option value="">— Choisir un poste —</option>
+                  <label>Poste(s) souhaité(s) * — vous pouvez en cocher plusieurs (ex. matin et après-midi)</label>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {postes.map((p) => {
                       const creneau = posteCreneauLabel(p);
+                      const full = p.places_restantes <= 0;
                       const label = creneau ? `${creneau} — ${p.nom}` : p.nom;
                       return (
-                        <option key={p.id} value={p.id} disabled={p.places_restantes <= 0}>
-                          {label} (
-                          {p.places_restantes <= 0
-                            ? "complet"
-                            : `${p.places_restantes} place${p.places_restantes > 1 ? "s" : ""} restante${
-                                p.places_restantes > 1 ? "s" : ""
-                              }`}
-                          )
-                        </option>
+                        <label key={p.id} className="checkbox-row" style={{ opacity: full ? 0.55 : 1 }}>
+                          <input
+                            type="checkbox"
+                            checked={posteIds.includes(p.id)}
+                            disabled={full}
+                            onChange={() => togglePoste(p.id)}
+                          />
+                          {label}{" "}
+                          <span className="muted" style={{ fontSize: ".78rem" }}>
+                            (
+                            {full
+                              ? "complet"
+                              : `${p.places_restantes} place${p.places_restantes > 1 ? "s" : ""} restante${
+                                  p.places_restantes > 1 ? "s" : ""
+                                }`}
+                            )
+                          </span>
+                        </label>
                       );
                     })}
-                  </select>
+                  </div>
                 </div>
               )}
               <div className="field">
