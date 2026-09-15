@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
 
 export default function AdminRecap() {
@@ -56,12 +57,30 @@ export default function AdminRecap() {
     setLoading(false);
   }
 
+  function handleExport() {
+    const data = rows.map((r) => ({
+      "Bénévole": `${r.prenom} ${r.nom}`,
+      Groupe: r.groupe,
+      "Nb. événements": r.count,
+      "Détail des événements": r.events.join(", "),
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws["!cols"] = [{ wch: 24 }, { wch: 22 }, { wch: 14 }, { wch: 60 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Récapitulatif");
+    const today = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `recap-benevoles-${today}.xlsx`);
+  }
+
   if (loading) return <p className="muted">Chargement…</p>;
 
   return (
     <div>
       <div className="section-title">
         <h2>Récapitulatif des bénévoles</h2>
+        <button className="btn btn-primary btn-sm" onClick={handleExport} disabled={!rows.length}>
+          Exporter en Excel
+        </button>
       </div>
       <p className="muted" style={{ marginTop: -6 }}>
         Basé sur les présences pointées sur chaque événement. À consulter en fin de saison.
