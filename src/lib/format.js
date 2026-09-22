@@ -92,3 +92,7 @@ export function categorieLabel(categorie) {
   const found = CATEGORIES.find((c) => c.value === categorie);
   return found ? found.label : CATEGORIES[0].label;
 }
+
+// Niveaux/rôles d'officiel proposés dans le formulaire d'inscription pour
+// les compétitions départementales — une personne peut en cocher plusieurs.
+export const NIVEAUX_OFFICIELS = ["Chronométreur", "Juge de virage", "Juge de nage"];
