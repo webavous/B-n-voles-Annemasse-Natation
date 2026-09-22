@@ -138,6 +138,7 @@ export default function PublicOfficiels() {
           postes={postesFor(forms[signupEvent.id]?.id)}
           adherents={adherents}
           heading="Je m'inscris comme officiel"
+          showNiveauOfficiel
           onClose={() => {
             setSignupEvent(null);
             loadAll();
