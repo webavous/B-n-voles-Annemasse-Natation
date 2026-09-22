@@ -95,4 +95,4 @@ export function categorieLabel(categorie) {
 
 // Niveaux/rôles d'officiel proposés dans le formulaire d'inscription pour
 // les compétitions départementales — une personne peut en cocher plusieurs.
-export const NIVEAUX_OFFICIELS = ["Chronométreur", "Juge de virage", "Juge de nage"];
+export const NIVEAUX_OFFICIELS = ["Chronométreur", "Juge de virage", "Juge de nage", "Stagiaire"];
