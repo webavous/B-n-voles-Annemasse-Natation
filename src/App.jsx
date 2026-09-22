@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import PublicHome from "./pages/PublicHome.jsx";
+import PublicOfficiels from "./pages/PublicOfficiels.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
 import AdminLayout from "./pages/AdminLayout.jsx";
 import AdminCalendrier from "./pages/AdminCalendrier.jsx";
@@ -12,6 +13,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<PublicHome />} />
+      <Route path="/officiels" element={<PublicOfficiels />} />
       <Route path="/admin/connexion" element={<AdminLogin />} />
       <Route
         path="/admin"
