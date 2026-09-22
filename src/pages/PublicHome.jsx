@@ -25,7 +25,10 @@ export default function PublicHome() {
       supabase.from("v_postes_disponibilite").select("*"),
       supabase.from("adherents").select("*").order("groupe").order("nom"),
     ]);
-    setEvents(evs || []);
+    // Les événements « officiels compétition départementale » ont leur propre
+    // onglet public (/officiels) — on ne les affiche pas ici, pour ne pas
+    // mélanger avec le bénévolat classique.
+    setEvents((evs || []).filter((e) => (e.categorie || "benevolat") !== "officiels"));
     const formMap = {};
     (fs || []).forEach((f) => (formMap[f.evenement_id] = f));
     setForms(formMap);
@@ -56,9 +59,14 @@ export default function PublicHome() {
       <div className="topbar">
         <div className="topbar-inner">
           <Brand subtitle="Calendrier & bénévolat" />
-          <Link to="/admin" className="btn btn-ghost btn-sm">
-            Espace admin
-          </Link>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Link to="/officiels" className="btn btn-ghost btn-sm">
+              Officiels compétition départementale
+            </Link>
+            <Link to="/admin" className="btn btn-ghost btn-sm">
+              Espace admin
+            </Link>
+          </div>
         </div>
       </div>
 
