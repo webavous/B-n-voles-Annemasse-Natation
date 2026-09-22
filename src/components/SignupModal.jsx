@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { fmtDateRange, posteCreneauLabel, posteCreneauKey } from "../lib/format";
 
-export default function SignupModal({ event, form, postes, adherents, onClose }) {
+export default function SignupModal({ event, form, postes, adherents, onClose, heading = "Je me porte bénévole" }) {
   const [nom, setNom] = useState("");
   const [prenom, setPrenom] = useState("");
   const [telephone, setTelephone] = useState("");
@@ -102,7 +102,7 @@ export default function SignupModal({ event, form, postes, adherents, onClose })
           </>
         ) : postes.length && !anyAvailable ? (
           <>
-            <h3>Je me porte bénévole</h3>
+            <h3>{heading}</h3>
             <p className="modal-sub">{event.titre}</p>
             <p>
               Tous les postes sont complets pour cet événement — merci de votre intérêt, n'hésitez pas à revenir
@@ -114,7 +114,7 @@ export default function SignupModal({ event, form, postes, adherents, onClose })
           </>
         ) : (
           <>
-            <h3>Je me porte bénévole</h3>
+            <h3>{heading}</h3>
             <p className="modal-sub">
               {event.titre} &middot; {fmtDateRange(event.date, event.date_fin)}
               {form.besoins ? <><br />{form.besoins}</> : null}
