@@ -60,6 +60,10 @@ export default function SignupModal({
     e.preventDefault();
     setError("");
 
+    if (showNiveauOfficiel && niveauxOfficiels.length === 0) {
+      setError("Choisissez au moins un niveau officiel.");
+      return;
+    }
     if (postes.length && posteIds.length === 0) {
       setError("Choisissez au moins un poste (vous pouvez en cocher plusieurs).");
       return;
@@ -172,7 +176,7 @@ export default function SignupModal({
               </div>
               {showNiveauOfficiel && (
                 <div className="field">
-                  <label>Niveau officiel (vous pouvez en cocher plusieurs)</label>
+                  <label>Niveau officiel * — vous pouvez en cocher plusieurs</label>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {NIVEAUX_OFFICIELS.map((n) => (
                       <label key={n} className="checkbox-row">
