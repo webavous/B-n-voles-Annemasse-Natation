@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
 import { CATEGORIES, categorieLabel, fmtDateRange, MOMENTS, momentRank, posteCreneauLabel } from "../lib/format";
 
@@ -177,6 +178,51 @@ export default function AdminCalendrier() {
         .insert({ inscription_id: inscriptionId, present: checked, date_pointage: new Date().toISOString() });
     }
     loadAll({ silent: true });
+  }
+
+  // Export Excel des inscriptions d'un événement précis (nom, prénom,
+  // contact, niveau officiel déclaré, disponibilité par créneau) — pratique
+  // pour préparer l'organisation d'une compétition (officiels ou bénévolat).
+  function handleExportInscriptions(ev, insc) {
+    const byKey = {};
+    insc.forEach((i) => {
+      const key = i.adherent_id || `${i.nom}|${i.prenom}|${i.email}`;
+      if (!byKey[key]) {
+        byKey[key] = {
+          nom: i.nom,
+          prenom: i.prenom,
+          telephone: i.telephone || "",
+          email: i.email,
+          niveauOfficiel: i.niveau_officiel || "",
+          creneaux: [],
+        };
+      }
+      const poste = postes.find((p) => p.id === i.poste_id);
+      if (poste) {
+        byKey[key].creneaux.push(posteCreneauLabel(poste) || poste.nom);
+      }
+    });
+
+    const rows = Object.values(byKey).map((r) => ({
+      Nom: r.nom,
+      Prénom: r.prenom,
+      Téléphone: r.telephone || "—",
+      Email: r.email,
+      "Niveau officiel": r.niveauOfficiel || "—",
+      Disponibilité: r.creneaux.length ? r.creneaux.join(" ; ") : "—",
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [{ wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 26 }, { wch: 26 }, { wch: 40 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Inscriptions");
+    const slug = (ev.titre || "evenement")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase();
+    XLSX.writeFile(wb, `inscriptions-${slug || "evenement"}.xlsx`);
   }
 
   if (loading) return <p className="muted">Chargement…</p>;
@@ -446,7 +492,27 @@ export default function AdminCalendrier() {
                 </div>
 
                 <div className="subblock">
-                  <div className="subblock-title">Inscriptions &amp; présence ({insc.length})</div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                      flexWrap: "wrap",
+                      marginBottom: 10,
+                    }}
+                  >
+                    <div className="subblock-title" style={{ marginBottom: 0 }}>
+                      Inscriptions &amp; présence ({insc.length})
+                    </div>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => handleExportInscriptions(ev, insc)}
+                      disabled={!insc.length}
+                    >
+                      Exporter en Excel
+                    </button>
+                  </div>
                   {!insc.length ? (
                     <p className="muted" style={{ fontSize: ".85rem" }}>
                       Aucune inscription pour cet événement.
@@ -460,6 +526,7 @@ export default function AdminCalendrier() {
                             <th>Contact</th>
                             <th>Poste</th>
                             <th>Métier / compétence</th>
+                            <th>Niveau officiel</th>
                             <th>Rattaché à</th>
                             <th>Présent</th>
                           </tr>
@@ -494,6 +561,7 @@ export default function AdminCalendrier() {
                                   )}
                                 </td>
                                 <td data-label="Métier / compétence">{i.metier_competence || "—"}</td>
+                                <td data-label="Niveau officiel">{i.niveau_officiel || "—"}</td>
                                 <td data-label="Rattaché à">
                                   {(() => {
                                     const a = adherents.find((x) => x.id === i.adherent_id);
