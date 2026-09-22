@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { fmtDateRange, MOMENTS, momentRank, posteCreneauLabel } from "../lib/format";
+import { CATEGORIES, categorieLabel, fmtDateRange, MOMENTS, momentRank, posteCreneauLabel } from "../lib/format";
 
 export default function AdminCalendrier() {
   const [events, setEvents] = useState([]);
@@ -76,6 +76,7 @@ export default function AdminCalendrier() {
       date_fin: fd.get("date_fin") || null,
       lieu: fd.get("lieu"),
       description: fd.get("description"),
+      categorie: fd.get("categorie") || "benevolat",
       visible: true,
     });
     if (error) { showToast("Échec de la création."); return; }
@@ -96,6 +97,7 @@ export default function AdminCalendrier() {
         date_fin: fd.get("date_fin") || null,
         lieu: fd.get("lieu"),
         description: fd.get("description"),
+        categorie: fd.get("categorie") || "benevolat",
         visible: fd.get("visible") === "on",
       })
       .eq("id", eventId);
@@ -210,6 +212,20 @@ export default function AdminCalendrier() {
               <input type="text" name="lieu" placeholder="Piscine des Grands Bois, Annemasse" />
             </div>
             <div className="field">
+              <label>Catégorie</label>
+              <select name="categorie" defaultValue="benevolat">
+                {CATEGORIES.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              <p className="muted" style={{ fontSize: ".78rem", margin: "5px 0 0" }}>
+                « Officiels compétition départementale » place l'événement sur l'onglet public dédié — le lien à
+                mettre dans vos convocations.
+              </p>
+            </div>
+            <div className="field">
               <label>Description</label>
               <textarea name="description" placeholder="Quelques mots sur l'événement, visibles par les adhérents" />
             </div>
@@ -242,6 +258,9 @@ export default function AdminCalendrier() {
                   {ev.lieu ? ` · ${ev.lieu}` : ""}
                 </div>
               </div>
+              {ev.categorie === "officiels" && (
+                <span className="pill pill-accent">{categorieLabel(ev.categorie)}</span>
+              )}
               {form && (
                 <span className={`badge ${form.statut === "ouvert" ? "badge-open" : "badge-closed"}`}>
                   {form.statut === "ouvert" ? "Bénévolat ouvert" : "Bénévolat fermé"}
@@ -276,6 +295,16 @@ export default function AdminCalendrier() {
                     <div className="field">
                       <label>Lieu</label>
                       <input type="text" name="lieu" defaultValue={ev.lieu || ""} />
+                    </div>
+                    <div className="field">
+                      <label>Catégorie</label>
+                      <select name="categorie" defaultValue={ev.categorie || "benevolat"}>
+                        {CATEGORIES.map((c) => (
+                          <option key={c.value} value={c.value}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div className="field">
                       <label>Description</label>
