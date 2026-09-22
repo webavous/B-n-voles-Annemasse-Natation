@@ -79,3 +79,16 @@ export function posteCreneauKey(poste) {
   if (!poste) return "";
   return `${poste.date || ""}|${poste.moment || ""}`;
 }
+
+// Catégorie d'un événement : bénévolat classique (buvette, accueil…) ou
+// officiels pour les compétitions départementales (chronométreurs, juges de
+// virage, starters…), affichés sur un onglet public séparé.
+export const CATEGORIES = [
+  { value: "benevolat", label: "Bénévolat" },
+  { value: "officiels", label: "Officiels compétition départementale" },
+];
+
+export function categorieLabel(categorie) {
+  const found = CATEGORIES.find((c) => c.value === categorie);
+  return found ? found.label : CATEGORIES[0].label;
+}
