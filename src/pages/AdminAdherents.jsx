@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
 const GROUPES = [
-  "Ecole de natation",
+  "ENF 1",
+  "ENF 2",
+  "ENF 3",
+  "ENF 4",
   "Loisir jeune",
   "Loisir Ado",
   "Loisir lycée",
