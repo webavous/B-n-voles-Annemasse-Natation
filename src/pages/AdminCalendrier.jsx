@@ -1,7 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
-import { CATEGORIES, categorieLabel, fmtDateRange, MOMENTS, momentRank, posteCreneauLabel } from "../lib/format";
+import {
+  CATEGORIES,
+  categorieLabel,
+  fmtDateRange,
+  MOMENTS,
+  momentRank,
+  NIVEAUX_OFFICIELS,
+  posteCreneauLabel,
+} from "../lib/format";
 
 export default function AdminCalendrier() {
   const [events, setEvents] = useState([]);
@@ -13,6 +21,7 @@ export default function AdminCalendrier() {
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
   const [newEventOpen, setNewEventOpen] = useState(false);
+  const [manualAddOpen, setManualAddOpen] = useState(false);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
@@ -50,6 +59,17 @@ export default function AdminCalendrier() {
     setAdherents(ads || []);
     if (!silent) setLoading(false);
   }
+
+  // Adhérents groupés par groupe, pour le menu déroulant « Se rattacher à un
+  // adhérent » du formulaire d'ajout manuel.
+  const adherentsByGroupe = useMemo(() => {
+    const map = {};
+    adherents.forEach((a) => {
+      const g = a.groupe || "Autre";
+      (map[g] = map[g] || []).push(a);
+    });
+    return map;
+  }, [adherents]);
 
   function postesFor(formulaireId) {
     return postes
@@ -180,6 +200,37 @@ export default function AdminCalendrier() {
     loadAll({ silent: true });
   }
 
+  // Ajout manuel d'un bénévole/officiel depuis l'espace admin, pour quelqu'un
+  // qui ne se serait pas inscrit en amont via le formulaire public (ex. un
+  // parent qui se propose sur place le jour même).
+  async function handleAddManual(e, form) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const nom = (fd.get("nom") || "").trim();
+    const prenom = (fd.get("prenom") || "").trim();
+    if (!nom || !prenom) {
+      showToast("Indiquez au moins le nom et le prénom.");
+      return;
+    }
+    const niveaux = fd.getAll("niveau_officiel");
+    const { error } = await supabase.from("inscriptions_benevoles").insert({
+      formulaire_id: form.id,
+      nom,
+      prenom,
+      telephone: fd.get("telephone") || null,
+      email: fd.get("email") || null,
+      metier_competence: fd.get("metier_competence") || null,
+      niveau_officiel: niveaux.length ? niveaux.join(", ") : null,
+      poste_id: fd.get("poste_id") || null,
+      adherent_id: fd.get("adherent_id") || null,
+    });
+    if (error) { showToast("Échec de l'ajout."); return; }
+    e.target.reset();
+    setManualAddOpen(false);
+    showToast("Bénévole ajouté.");
+    loadAll({ silent: true });
+  }
+
   // Export Excel des inscriptions d'un événement précis (nom, prénom,
   // contact, niveau officiel déclaré, disponibilité par créneau) — pratique
   // pour préparer l'organisation d'une compétition (officiels ou bénévolat).
@@ -218,7 +269,7 @@ export default function AdminCalendrier() {
     XLSX.utils.book_append_sheet(wb, ws, "Inscriptions");
     const slug = (ev.titre || "evenement")
       .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[̀-ͯ]/g, "")
       .replace(/[^a-zA-Z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
       .toLowerCase();
@@ -293,7 +344,13 @@ export default function AdminCalendrier() {
 
         return (
           <div className="admin-event-row" key={ev.id}>
-            <button className="admin-event-head" onClick={() => setExpandedId(open ? null : ev.id)}>
+            <button
+              className="admin-event-head"
+              onClick={() => {
+                setExpandedId(open ? null : ev.id);
+                setManualAddOpen(false);
+              }}
+            >
               <div className="grow">
                 <h3>
                   {ev.titre}
@@ -505,14 +562,120 @@ export default function AdminCalendrier() {
                     <div className="subblock-title" style={{ marginBottom: 0 }}>
                       Inscriptions &amp; présence ({insc.length})
                     </div>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => handleExportInscriptions(ev, insc)}
-                      disabled={!insc.length}
-                    >
-                      Exporter en Excel
-                    </button>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {form && (
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={() => setManualAddOpen((v) => !v)}
+                        >
+                          {manualAddOpen ? "Annuler" : "+ Ajouter un bénévole"}
+                        </button>
+                      )}
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => handleExportInscriptions(ev, insc)}
+                        disabled={!insc.length}
+                      >
+                        Exporter en Excel
+                      </button>
+                    </div>
                   </div>
+
+                  {!form && (
+                    <p className="muted" style={{ fontSize: ".82rem", margin: "0 0 10px" }}>
+                      Créez d'abord le formulaire bénévole ci-dessus pour pouvoir ajouter quelqu'un manuellement.
+                    </p>
+                  )}
+
+                  {form && manualAddOpen && (
+                    <div className="card" style={{ marginBottom: 14 }}>
+                      <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
+                        Pour quelqu'un qui se propose sur place, sans être passé par le formulaire d'inscription en
+                        ligne.
+                      </p>
+                      <form onSubmit={(e) => handleAddManual(e, form)}>
+                        <div className="field-row">
+                          <div className="field">
+                            <label>Nom *</label>
+                            <input type="text" name="nom" required />
+                          </div>
+                          <div className="field">
+                            <label>Prénom *</label>
+                            <input type="text" name="prenom" required />
+                          </div>
+                        </div>
+                        <div className="field-row">
+                          <div className="field">
+                            <label>Téléphone</label>
+                            <input type="tel" name="telephone" placeholder="06 12 34 56 78" />
+                          </div>
+                          <div className="field">
+                            <label>Email</label>
+                            <input type="email" name="email" />
+                          </div>
+                        </div>
+                        <div className="field">
+                          <label>Métier / compétence</label>
+                          <input
+                            type="text"
+                            name="metier_competence"
+                            placeholder="Ex. infirmier, comptable, chronométreur…"
+                          />
+                        </div>
+                        {ev.categorie === "officiels" && (
+                          <div className="field">
+                            <label>Niveau officiel — vous pouvez en cocher plusieurs</label>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              {NIVEAUX_OFFICIELS.map((n) => (
+                                <label key={n} className="checkbox-row">
+                                  <input type="checkbox" name="niveau_officiel" value={n} />
+                                  {n}
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {eventPostes.length > 0 && (
+                          <div className="field">
+                            <label>Poste (optionnel)</label>
+                            <select name="poste_id" defaultValue="">
+                              <option value="">— Aucun poste précis —</option>
+                              {eventPostes.map((p) => {
+                                const t = taken(p.id);
+                                const creneau = posteCreneauLabel(p);
+                                const label = creneau ? `${creneau} — ${p.nom}` : p.nom;
+                                return (
+                                  <option key={p.id} value={p.id}>
+                                    {label} ({t}/{p.places_totales})
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          </div>
+                        )}
+                        <div className="field">
+                          <label>Se rattacher à un adhérent du club</label>
+                          <select name="adherent_id" defaultValue="">
+                            <option value="">— Sélectionner (facultatif) —</option>
+                            {Object.entries(adherentsByGroupe).map(([groupe, list]) => (
+                              <optgroup key={groupe} label={groupe}>
+                                {list.map((a) => (
+                                  <option key={a.id} value={a.id}>
+                                    {a.prenom} {a.nom}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            ))}
+                          </select>
+                        </div>
+                        <button type="submit" className="btn btn-primary btn-sm">
+                          Ajouter
+                        </button>
+                      </form>
+                    </div>
+                  )}
+
                   {!insc.length ? (
                     <p className="muted" style={{ fontSize: ".85rem" }}>
                       Aucune inscription pour cet événement.
