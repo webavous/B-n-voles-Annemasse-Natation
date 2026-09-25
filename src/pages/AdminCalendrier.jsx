@@ -208,8 +208,13 @@ export default function AdminCalendrier() {
     const fd = new FormData(e.target);
     const nom = (fd.get("nom") || "").trim();
     const prenom = (fd.get("prenom") || "").trim();
+    const adherentId = fd.get("adherent_id") || "";
     if (!nom || !prenom) {
       showToast("Indiquez au moins le nom et le prénom.");
+      return;
+    }
+    if (!adherentId) {
+      showToast("Choisissez l'adhérent du club auquel rattacher ce bénévole.");
       return;
     }
     const niveaux = fd.getAll("niveau_officiel");
@@ -222,7 +227,7 @@ export default function AdminCalendrier() {
       metier_competence: fd.get("metier_competence") || null,
       niveau_officiel: niveaux.length ? niveaux.join(", ") : null,
       poste_id: fd.get("poste_id") || null,
-      adherent_id: fd.get("adherent_id") || null,
+      adherent_id: adherentId,
     });
     if (error) { showToast("Échec de l'ajout."); return; }
     e.target.reset();
@@ -655,9 +660,9 @@ export default function AdminCalendrier() {
                           </div>
                         )}
                         <div className="field">
-                          <label>Se rattacher à un adhérent du club</label>
-                          <select name="adherent_id" defaultValue="">
-                            <option value="">— Sélectionner (facultatif) —</option>
+                          <label>Se rattacher à un adhérent du club *</label>
+                          <select name="adherent_id" defaultValue="" required>
+                            <option value="">— Sélectionner —</option>
                             {Object.entries(adherentsByGroupe).map(([groupe, list]) => (
                               <optgroup key={groupe} label={groupe}>
                                 {list.map((a) => (
