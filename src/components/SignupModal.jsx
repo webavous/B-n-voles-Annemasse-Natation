@@ -64,6 +64,10 @@ export default function SignupModal({
       setError("Choisissez au moins un niveau officiel.");
       return;
     }
+    if (!adherentId) {
+      setError("Choisissez l'adhérent du club auquel vous vous rattachez.");
+      return;
+    }
     if (postes.length && posteIds.length === 0) {
       setError("Choisissez au moins un poste (vous pouvez en cocher plusieurs).");
       return;
@@ -224,9 +228,9 @@ export default function SignupModal({
                 </div>
               )}
               <div className="field">
-                <label>Se rattacher à un adhérent du club</label>
-                <select value={adherentId} onChange={(e) => setAdherentId(e.target.value)}>
-                  <option value="">— Sélectionner (facultatif) —</option>
+                <label>Se rattacher à un adhérent du club *</label>
+                <select value={adherentId} onChange={(e) => setAdherentId(e.target.value)} required>
+                  <option value="">— Sélectionner —</option>
                   {Object.entries(adherentsByGroupe).map(([groupe, list]) => (
                     <optgroup key={groupe} label={groupe}>
                       {list.map((a) => (
