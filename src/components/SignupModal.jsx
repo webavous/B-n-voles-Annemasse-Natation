@@ -24,11 +24,6 @@ export default function SignupModal({
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
 
-  // Empêche la page de fond de défiler pendant que la fenêtre d'inscription
-  // est ouverte — sans ça, sur téléphone (notamment dans les navigateurs
-  // intégrés comme celui de l'appli Mail), le contenu de la page derrière
-  // peut se voir en transparence par-dessus le formulaire et rend la
-  // lecture illisible.
   useEffect(() => {
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -50,8 +45,6 @@ export default function SignupModal({
       if (prev.includes(poste.id)) {
         return prev.filter((x) => x !== poste.id);
       }
-      // Un seul poste par créneau (même jour + même moment) : on retire
-      // d'abord tout autre poste déjà choisi sur ce même créneau.
       const key = posteCreneauKey(poste);
       const withoutSameCreneau = prev.filter((id) => {
         const other = postes.find((x) => x.id === id);
@@ -110,6 +103,30 @@ export default function SignupModal({
       return;
     }
     setDone(true);
+
+    const postesLabels = postes.length
+      ? posteIds
+          .map((pid) => {
+            const p = postes.find((x) => x.id === pid);
+            if (!p) return "";
+            const creneau = posteCreneauLabel(p);
+            return creneau ? `${creneau} — ${p.nom}` : p.nom;
+          })
+          .filter(Boolean)
+      : [];
+    fetch("/api/send-confirmation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        prenom,
+        nom,
+        eventTitre: event.titre,
+        eventDate: fmtDateRange(event.date, event.date_fin),
+        postesLabels,
+        niveauOfficiel: niveauxOfficiels.length ? niveauxOfficiels.join(", ") : null,
+      }),
+    }).catch(() => {});
   }
 
   return (
