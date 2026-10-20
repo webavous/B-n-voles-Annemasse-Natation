@@ -1,0 +1,807 @@
+import { useEffect, useState } from "react";
+import * as XLSX from "xlsx";
+import { supabase } from "../lib/supabaseClient";
+import {
+  CATEGORIES,
+  categorieLabel,
+  fmtDateRange,
+  MOMENTS,
+  momentRank,
+  NIVEAUX_OFFICIELS,
+  posteCreneauLabel,
+} from "../lib/format";
+import AdherentPicker from "../components/AdherentPicker.jsx";
+
+// Formulaire d'ajout manuel d'un bénévole/officiel, extrait en composant à
+// part pour pouvoir garder son propre état (notamment l'adhérent sélectionné
+// dans le champ de recherche) — il est démonté/remonté à chaque
+// ouverture/fermeture, ce qui le réinitialise proprement à chaque fois.
+function ManualAddForm({ ev, form, eventPostes, adherents, taken, onSubmit }) {
+  const [adherentId, setAdherentId] = useState("");
+  return (
+    <div className="card" style={{ marginBottom: 14 }}>
+      <p className="muted" style={{ fontSize: ".82rem", marginTop: 0 }}>
+        Pour quelqu'un qui se propose sur place, sans être passé par le formulaire d'inscription en ligne.
+      </p>
+      <form onSubmit={onSubmit}>
+        <div className="field-row">
+          <div className="field">
+            <label>Nom *</label>
+            <input type="text" name="nom" required />
+          </div>
+          <div className="field">
+            <label>Prénom *</label>
+            <input type="text" name="prenom" required />
+          </div>
+        </div>
+        <div className="field-row">
+          <div className="field">
+            <label>Téléphone</label>
+            <input type="tel" name="telephone" placeholder="06 12 34 56 78" />
+          </div>
+          <div className="field">
+            <label>Email</label>
+            <input type="email" name="email" />
+          </div>
+        </div>
+        <div className="field">
+          <label>Métier / compétence</label>
+          <input type="text" name="metier_competence" placeholder="Ex. infirmier, comptable, chronométreur…" />
+        </div>
+        {ev.categorie === "officiels" && (
+          <div className="field">
+            <label>Niveau officiel — vous pouvez en cocher plusieurs</label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {NIVEAUX_OFFICIELS.map((n) => (
+                <label key={n} className="checkbox-row">
+                  <input type="checkbox" name="niveau_officiel" value={n} />
+                  {n}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+        {eventPostes.length > 0 && (
+          <div className="field">
+            <label>Poste (optionnel)</label>
+            <select name="poste_id" defaultValue="">
+              <option value="">— Aucun poste précis —</option>
+              {eventPostes.map((p) => {
+                const t = taken(p.id);
+                const creneau = posteCreneauLabel(p);
+                const label = creneau ? `${creneau} — ${p.nom}` : p.nom;
+                return (
+                  <option key={p.id} value={p.id}>
+                    {label} ({t}/{p.places_totales})
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        )}
+        <div className="field">
+          <label>Se rattacher à un adhérent du club *</label>
+          <AdherentPicker adherents={adherents} value={adherentId} onChange={setAdherentId} required />
+        </div>
+        <button type="submit" className="btn btn-primary btn-sm">
+          Ajouter
+        </button>
+      </form>
+    </div>
+  );
+}
+
+export default function AdminCalendrier() {
+  const [events, setEvents] = useState([]);
+  const [forms, setForms] = useState({}); // evenement_id -> formulaire
+  const [postes, setPostes] = useState([]); // all postes_benevolat
+  const [inscriptions, setInscriptions] = useState([]);
+  const [presences, setPresences] = useState({}); // inscription_id -> presence row
+  const [adherents, setAdherents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState(null);
+  const [newEventOpen, setNewEventOpen] = useState(false);
+  const [manualAddOpen, setManualAddOpen] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    loadAll();
+  }, []);
+
+  function showToast(msg) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2600);
+  }
+
+  // silent = true : on recharge les données sans remplacer toute la page par
+  // "Chargement…" — utile après une petite action (cocher une présence, par
+  // exemple) pour ne pas faire disparaître/réapparaître la liste et donc ne
+  // pas faire remonter la page en haut de l'écran.
+  async function loadAll({ silent = false } = {}) {
+    if (!silent) setLoading(true);
+    const [{ data: evs }, { data: fs }, { data: ps }, { data: insc }, { data: pres }, { data: ads }] = await Promise.all([
+      supabase.from("evenements").select("*").order("date", { ascending: true }),
+      supabase.from("formulaires_benevolat").select("*"),
+      supabase.from("postes_benevolat").select("*"),
+      supabase.from("inscriptions_benevoles").select("*"),
+      supabase.from("presences").select("*"),
+      supabase.from("adherents").select("*"),
+    ]);
+    setEvents(evs || []);
+    const formMap = {};
+    (fs || []).forEach((f) => (formMap[f.evenement_id] = f));
+    setForms(formMap);
+    setPostes(ps || []);
+    setInscriptions(insc || []);
+    const presMap = {};
+    (pres || []).forEach((p) => (presMap[p.inscription_id] = p));
+    setPresences(presMap);
+    setAdherents(ads || []);
+    if (!silent) setLoading(false);
+  }
+
+  function postesFor(formulaireId) {
+    return postes
+      .filter((p) => p.formulaire_id === formulaireId)
+      .slice()
+      .sort((a, b) => {
+        const d = (a.date || "").localeCompare(b.date || "");
+        if (d !== 0) return d;
+        return momentRank(a.moment) - momentRank(b.moment);
+      });
+  }
+  function inscriptionsFor(formulaireId) {
+    return inscriptions.filter((i) => i.formulaire_id === formulaireId);
+  }
+  function taken(posteId) {
+    return inscriptions.filter((i) => i.poste_id === posteId).length;
+  }
+
+  async function handleCreateEvent(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await supabase.from("evenements").insert({
+      titre: fd.get("titre"),
+      date: fd.get("date"),
+      date_fin: fd.get("date_fin") || null,
+      lieu: fd.get("lieu"),
+      description: fd.get("description"),
+      categorie: fd.get("categorie") || "benevolat",
+      visible: true,
+    });
+    if (error) { showToast("Échec de la création."); return; }
+    e.target.reset();
+    setNewEventOpen(false);
+    showToast("Événement créé.");
+    loadAll({ silent: true });
+  }
+
+  async function handleEditEvent(e, eventId) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const { error } = await supabase
+      .from("evenements")
+      .update({
+        titre: fd.get("titre"),
+        date: fd.get("date"),
+        date_fin: fd.get("date_fin") || null,
+        lieu: fd.get("lieu"),
+        description: fd.get("description"),
+        categorie: fd.get("categorie") || "benevolat",
+        visible: fd.get("visible") === "on",
+      })
+      .eq("id", eventId);
+    if (error) { showToast("Échec de la mise à jour."); return; }
+    showToast("Événement mis à jour.");
+    loadAll({ silent: true });
+  }
+
+  async function handleDeleteEvent(eventId) {
+    await supabase.from("evenements").delete().eq("id", eventId);
+    setExpandedId(null);
+    showToast("Événement supprimé.");
+    loadAll({ silent: true });
+  }
+
+  async function handleCreateForm(eventId) {
+    const { error } = await supabase.from("formulaires_benevolat").insert({ evenement_id: eventId, statut: "ferme" });
+    if (error) { showToast("Échec de la création du formulaire."); return; }
+    showToast("Formulaire créé.");
+    loadAll({ silent: true });
+  }
+
+  async function handleToggleForm(form) {
+    await supabase
+      .from("formulaires_benevolat")
+      .update({ statut: form.statut === "ouvert" ? "ferme" : "ouvert" })
+      .eq("id", form.id);
+    showToast(form.statut === "ouvert" ? "Inscriptions fermées." : "Inscriptions ouvertes !");
+    loadAll({ silent: true });
+  }
+
+  async function handleSaveBesoins(e, form) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    await supabase.from("formulaires_benevolat").update({ besoins: fd.get("besoins") }).eq("id", form.id);
+    showToast("Notes enregistrées.");
+    loadAll({ silent: true });
+  }
+
+  async function handleAddPoste(e, formId) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const places = parseInt(fd.get("places"), 10);
+    if (!fd.get("nom") || !places || places < 1) {
+      showToast("Indiquez un nom de poste et un nombre de places valide.");
+      return;
+    }
+    const { error } = await supabase.from("postes_benevolat").insert({
+      formulaire_id: formId,
+      nom: fd.get("nom"),
+      places_totales: places,
+      date: fd.get("date") || null,
+      moment: fd.get("moment") || null,
+    });
+    if (error) { showToast("Échec de l'ajout du poste."); return; }
+    e.target.reset();
+    showToast("Poste ajouté.");
+    loadAll({ silent: true });
+  }
+
+  async function handleDeletePoste(posteId) {
+    await supabase.from("postes_benevolat").delete().eq("id", posteId);
+    showToast("Poste supprimé.");
+    loadAll({ silent: true });
+  }
+
+  // Suppression d'une inscription — utile quand un bénévole/officiel se
+  // désiste après s'être inscrit (ou après un ajout manuel par erreur).
+  async function handleDeleteInscription(inscriptionId, prenom, nom) {
+    if (!window.confirm(`Supprimer l'inscription de ${prenom} ${nom} ?`)) return;
+    await supabase.from("inscriptions_benevoles").delete().eq("id", inscriptionId);
+    showToast("Inscription supprimée.");
+    loadAll({ silent: true });
+  }
+
+  async function handleTogglePresence(inscriptionId, checked) {
+    const existing = presences[inscriptionId];
+    if (existing) {
+      await supabase
+        .from("presences")
+        .update({ present: checked, date_pointage: new Date().toISOString() })
+        .eq("id", existing.id);
+    } else {
+      await supabase
+        .from("presences")
+        .insert({ inscription_id: inscriptionId, present: checked, date_pointage: new Date().toISOString() });
+    }
+    loadAll({ silent: true });
+  }
+
+  // Ajout manuel d'un bénévole/officiel depuis l'espace admin, pour quelqu'un
+  // qui ne se serait pas inscrit en amont via le formulaire public (ex. un
+  // parent qui se propose sur place le jour même).
+  async function handleAddManual(e, form, ev) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const nom = (fd.get("nom") || "").trim();
+    const prenom = (fd.get("prenom") || "").trim();
+    const email = (fd.get("email") || "").trim();
+    const adherentId = fd.get("adherent_id") || "";
+    if (!nom || !prenom) {
+      showToast("Indiquez au moins le nom et le prénom.");
+      return;
+    }
+    if (!adherentId) {
+      showToast("Choisissez l'adhérent du club auquel rattacher ce bénévole.");
+      return;
+    }
+    const posteId = fd.get("poste_id") || null;
+    const niveaux = fd.getAll("niveau_officiel");
+    const niveauOfficiel = niveaux.length ? niveaux.join(", ") : null;
+    const { error } = await supabase.from("inscriptions_benevoles").insert({
+      formulaire_id: form.id,
+      nom,
+      prenom,
+      telephone: fd.get("telephone") || null,
+      email: email || null,
+      metier_competence: fd.get("metier_competence") || null,
+      niveau_officiel: niveauOfficiel,
+      poste_id: posteId,
+      adherent_id: adherentId,
+    });
+    if (error) { showToast("Échec de l'ajout."); return; }
+    setManualAddOpen(false);
+    showToast("Bénévole ajouté.");
+    loadAll({ silent: true });
+
+    // Email de confirmation — seulement si une adresse a été indiquée (le
+    // champ est facultatif dans ce formulaire). On n'attend pas la réponse
+    // et on n'affiche rien si ça échoue.
+    if (email) {
+      const poste = postes.find((p) => p.id === posteId);
+      const posteLabel = poste ? (posteCreneauLabel(poste) ? `${posteCreneauLabel(poste)} — ${poste.nom}` : poste.nom) : null;
+      fetch("/api/send-confirmation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          prenom,
+          nom,
+          eventTitre: ev.titre,
+          eventDate: fmtDateRange(ev.date, ev.date_fin),
+          postesLabels: posteLabel ? [posteLabel] : [],
+          niveauOfficiel,
+        }),
+      }).catch(() => {});
+    }
+  }
+
+  // Export Excel des inscriptions d'un événement précis (nom, prénom,
+  // contact, niveau officiel déclaré, disponibilité par créneau) — pratique
+  // pour préparer l'organisation d'une compétition (officiels ou bénévolat).
+  function handleExportInscriptions(ev, insc) {
+    const byKey = {};
+    insc.forEach((i) => {
+      const key = i.adherent_id || `${i.nom}|${i.prenom}|${i.email}`;
+      if (!byKey[key]) {
+        byKey[key] = {
+          nom: i.nom,
+          prenom: i.prenom,
+          telephone: i.telephone || "",
+          email: i.email,
+          niveauOfficiel: i.niveau_officiel || "",
+          creneaux: [],
+        };
+      }
+      const poste = postes.find((p) => p.id === i.poste_id);
+      if (poste) {
+        byKey[key].creneaux.push(posteCreneauLabel(poste) || poste.nom);
+      }
+    });
+
+    const rows = Object.values(byKey).map((r) => ({
+      Nom: r.nom,
+      Prénom: r.prenom,
+      Téléphone: r.telephone || "—",
+      Email: r.email,
+      "Niveau officiel": r.niveauOfficiel || "—",
+      Disponibilité: r.creneaux.length ? r.creneaux.join(" ; ") : "—",
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [{ wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 26 }, { wch: 26 }, { wch: 40 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Inscriptions");
+    const slug = (ev.titre || "evenement")
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase();
+    XLSX.writeFile(wb, `inscriptions-${slug || "evenement"}.xlsx`);
+  }
+
+  if (loading) return <p className="muted">Chargement…</p>;
+
+  return (
+    <div>
+      <div className="section-title">
+        <h2>Événements de la saison</h2>
+        <button className="btn btn-primary btn-sm" onClick={() => setNewEventOpen((v) => !v)}>
+          {newEventOpen ? "Annuler" : "+ Nouvel événement"}
+        </button>
+      </div>
+
+      {newEventOpen && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <form onSubmit={handleCreateEvent}>
+            <div className="field-row">
+              <div className="field">
+                <label>Titre *</label>
+                <input type="text" name="titre" required placeholder="Ex. Interclub" />
+              </div>
+              <div className="field">
+                <label>Date de début *</label>
+                <input type="date" name="date" required />
+              </div>
+            </div>
+            <div className="field">
+              <label>Date de fin (si l'événement dure plusieurs jours)</label>
+              <input type="date" name="date_fin" />
+            </div>
+            <div className="field">
+              <label>Lieu</label>
+              <input type="text" name="lieu" placeholder="Piscine des Grands Bois, Annemasse" />
+            </div>
+            <div className="field">
+              <label>Catégorie</label>
+              <select name="categorie" defaultValue="benevolat">
+                {CATEGORIES.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              <p className="muted" style={{ fontSize: ".78rem", margin: "5px 0 0" }}>
+                « Officiels compétition départementale » place l'événement sur l'onglet public dédié — le lien à
+                mettre dans vos convocations.
+              </p>
+            </div>
+            <div className="field">
+              <label>Description</label>
+              <textarea name="description" placeholder="Quelques mots sur l'événement, visibles par les adhérents" />
+            </div>
+            <button type="submit" className="btn btn-primary">
+              Créer l'événement
+            </button>
+          </form>
+        </div>
+      )}
+
+      {!events.length && <div className="empty-state">Aucun événement pour l'instant.</div>}
+
+      {events.map((ev) => {
+        const open = expandedId === ev.id;
+        const form = forms[ev.id];
+        const insc = form ? inscriptionsFor(form.id) : [];
+        const eventPostes = form ? postesFor(form.id) : [];
+        const presentCount = insc.filter((i) => presences[i.id]?.present).length;
+
+        return (
+          <div className="admin-event-row" key={ev.id}>
+            <button
+              className="admin-event-head"
+              onClick={() => {
+                setExpandedId(open ? null : ev.id);
+                setManualAddOpen(false);
+              }}
+            >
+              <div className="grow">
+                <h3>
+                  {ev.titre}
+                  {ev.visible === false && <span className="muted" style={{ fontSize: ".75rem" }}> (masqué)</span>}
+                </h3>
+                <div className="sub">
+                  {fmtDateRange(ev.date, ev.date_fin)}
+                  {ev.lieu ? ` · ${ev.lieu}` : ""}
+                </div>
+              </div>
+              {ev.categorie === "officiels" && (
+                <span className="pill pill-accent">{categorieLabel(ev.categorie)}</span>
+              )}
+              {form && (
+                <span className={`badge ${form.statut === "ouvert" ? "badge-open" : "badge-closed"}`}>
+                  {form.statut === "ouvert" ? "Bénévolat ouvert" : "Bénévolat fermé"}
+                </span>
+              )}
+              {insc.length > 0 && (
+                <span className="pill pill-group">
+                  {presentCount}/{insc.length} présents
+                </span>
+              )}
+            </button>
+
+            {open && (
+              <div className="admin-event-detail">
+                <div className="subblock">
+                  <div className="subblock-title">Détails de l'événement</div>
+                  <form onSubmit={(e) => handleEditEvent(e, ev.id)}>
+                    <div className="field-row">
+                      <div className="field">
+                        <label>Titre</label>
+                        <input type="text" name="titre" defaultValue={ev.titre} />
+                      </div>
+                      <div className="field">
+                        <label>Date de début</label>
+                        <input type="date" name="date" defaultValue={ev.date} />
+                      </div>
+                    </div>
+                    <div className="field">
+                      <label>Date de fin (si plusieurs jours)</label>
+                      <input type="date" name="date_fin" defaultValue={ev.date_fin || ""} />
+                    </div>
+                    <div className="field">
+                      <label>Lieu</label>
+                      <input type="text" name="lieu" defaultValue={ev.lieu || ""} />
+                    </div>
+                    <div className="field">
+                      <label>Catégorie</label>
+                      <select name="categorie" defaultValue={ev.categorie || "benevolat"}>
+                        {CATEGORIES.map((c) => (
+                          <option key={c.value} value={c.value}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label>Description</label>
+                      <textarea name="description" defaultValue={ev.description || ""} />
+                    </div>
+                    <label className="checkbox-row" style={{ marginBottom: 12 }}>
+                      <input type="checkbox" name="visible" defaultChecked={ev.visible !== false} /> Visible sur la
+                      page publique
+                    </label>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button type="submit" className="btn btn-primary btn-sm">
+                        Enregistrer
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm"
+                        onClick={() => handleDeleteEvent(ev.id)}
+                      >
+                        Supprimer l'événement
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                <div className="subblock">
+                  <div className="subblock-title">Formulaire bénévole</div>
+                  {!form ? (
+                    <button className="btn btn-ghost btn-sm" onClick={() => handleCreateForm(ev.id)}>
+                      Créer le formulaire bénévole pour cet événement
+                    </button>
+                  ) : (
+                    <>
+                      <form onSubmit={(e) => handleSaveBesoins(e, form)}>
+                        <div className="field">
+                          <label>Notes complémentaires (optionnel)</label>
+                          <textarea name="besoins" defaultValue={form.besoins || ""} placeholder="Toute précision utile pour les bénévoles" />
+                        </div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          <button type="submit" className="btn btn-ghost btn-sm">
+                            Enregistrer
+                          </button>
+                          <button
+                            type="button"
+                            className={`btn btn-sm ${form.statut === "ouvert" ? "btn-danger" : "btn-primary"}`}
+                            onClick={() => handleToggleForm(form)}
+                          >
+                            {form.statut === "ouvert" ? "Fermer les inscriptions" : "Ouvrir les inscriptions"}
+                          </button>
+                        </div>
+                      </form>
+
+                      <div style={{ marginTop: 16 }}>
+                        <label style={{ marginBottom: 8 }}>Postes &amp; places nécessaires</label>
+                        {ev.date_fin && (
+                          <p className="muted" style={{ fontSize: ".8rem", margin: "0 0 10px" }}>
+                            Cet événement dure plusieurs jours : indiquez pour chaque poste le jour et le moment
+                            concernés (ex. « Chronométrage » le samedi matin, un autre poste le samedi après-midi…).
+                          </p>
+                        )}
+                        {eventPostes.length > 0 && (
+                          <div className="table-wrap table-responsive" style={{ marginBottom: 10 }}>
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>Poste</th>
+                                  <th>Créneau</th>
+                                  <th>Places</th>
+                                  <th></th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {eventPostes.map((p) => {
+                                  const t = taken(p.id);
+                                  const full = t >= p.places_totales;
+                                  const creneau = posteCreneauLabel(p);
+                                  return (
+                                    <tr key={p.id}>
+                                      <td data-label="Poste">{p.nom}</td>
+                                      <td data-label="Créneau">{creneau || <span className="muted">—</span>}</td>
+                                      <td className="mono" data-label="Places">
+                                        {t} / {p.places_totales}{" "}
+                                        {full && (
+                                          <span className="pill" style={{ background: "var(--badge-closed-bg)", color: "var(--badge-closed-text)" }}>
+                                            complet
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td data-label="">
+                                        <button className="btn btn-danger btn-sm" onClick={() => handleDeletePoste(p.id)}>
+                                          Supprimer
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                        {!eventPostes.length && (
+                          <p className="muted" style={{ fontSize: ".82rem", margin: "6px 0 10px" }}>
+                            Aucun poste défini pour l'instant — sans poste, l'inscription reste ouverte sans limite de
+                            places.
+                          </p>
+                        )}
+                        <form
+                          onSubmit={(e) => handleAddPoste(e, form.id)}
+                          style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}
+                        >
+                          <div className="field" style={{ flex: 1, minWidth: 160, marginBottom: 0 }}>
+                            <label>Nom du poste</label>
+                            <input type="text" name="nom" required placeholder="Ex. Chronométrage" />
+                          </div>
+                          <div className="field" style={{ width: 150, marginBottom: 0 }}>
+                            <label>Jour (optionnel)</label>
+                            <input type="date" name="date" min={ev.date} max={ev.date_fin || ev.date} />
+                          </div>
+                          <div className="field" style={{ width: 160, marginBottom: 0 }}>
+                            <label>Moment</label>
+                            <select name="moment" defaultValue="Journée entière">
+                              {MOMENTS.map((m) => (
+                                <option key={m} value={m}>
+                                  {m}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="field" style={{ width: 100, marginBottom: 0 }}>
+                            <label>Places</label>
+                            <input type="number" min="1" name="places" required placeholder="4" />
+                          </div>
+                          <button type="submit" className="btn btn-primary btn-sm">
+                            Ajouter le poste
+                          </button>
+                        </form>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="subblock">
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                      flexWrap: "wrap",
+                      marginBottom: 10,
+                    }}
+                  >
+                    <div className="subblock-title" style={{ marginBottom: 0 }}>
+                      Inscriptions &amp; présence ({insc.length})
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {form && (
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={() => setManualAddOpen((v) => !v)}
+                        >
+                          {manualAddOpen ? "Annuler" : "+ Ajouter un bénévole"}
+                        </button>
+                      )}
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => handleExportInscriptions(ev, insc)}
+                        disabled={!insc.length}
+                      >
+                        Exporter en Excel
+                      </button>
+                    </div>
+                  </div>
+
+                  {!form && (
+                    <p className="muted" style={{ fontSize: ".82rem", margin: "0 0 10px" }}>
+                      Créez d'abord le formulaire bénévole ci-dessus pour pouvoir ajouter quelqu'un manuellement.
+                    </p>
+                  )}
+
+                  {form && manualAddOpen && (
+                    <ManualAddForm
+                      ev={ev}
+                      form={form}
+                      eventPostes={eventPostes}
+                      adherents={adherents}
+                      taken={taken}
+                      onSubmit={(e) => handleAddManual(e, form, ev)}
+                    />
+                  )}
+
+                  {!insc.length ? (
+                    <p className="muted" style={{ fontSize: ".85rem" }}>
+                      Aucune inscription pour cet événement.
+                    </p>
+                  ) : (
+                    <div className="table-wrap table-responsive">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Nom</th>
+                            <th>Contact</th>
+                            <th>Poste</th>
+                            <th>Métier / compétence</th>
+                            <th>Niveau officiel</th>
+                            <th>Rattaché à</th>
+                            <th>Présent</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {insc.map((i) => {
+                            const poste = postes.find((p) => p.id === i.poste_id);
+                            const creneau = poste ? posteCreneauLabel(poste) : "";
+                            const pres = presences[i.id]?.present;
+                            return (
+                              <tr key={i.id}>
+                                <td data-label="Nom">
+                                  {i.prenom} {i.nom}
+                                </td>
+                                <td className="mono" style={{ fontSize: ".78rem" }} data-label="Contact">
+                                  {i.telephone || "—"}
+                                  <br />
+                                  {i.email}
+                                </td>
+                                <td data-label="Poste">
+                                  {poste ? (
+                                    <>
+                                      <span className="pill pill-group">{poste.nom}</span>
+                                      {creneau && (
+                                        <div className="muted" style={{ fontSize: ".72rem", marginTop: 3 }}>
+                                          {creneau}
+                                        </div>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <span className="muted">—</span>
+                                  )}
+                                </td>
+                                <td data-label="Métier / compétence">{i.metier_competence || "—"}</td>
+                                <td data-label="Niveau officiel">{i.niveau_officiel || "—"}</td>
+                                <td data-label="Rattaché à">
+                                  {(() => {
+                                    const a = adherents.find((x) => x.id === i.adherent_id);
+                                    return a ? (
+                                      <>
+                                        {a.prenom} {a.nom}
+                                        <br />
+                                        <span className="pill pill-group">{a.groupe || "—"}</span>
+                                      </>
+                                    ) : (
+                                      <span className="muted">—</span>
+                                    );
+                                  })()}
+                                </td>
+                                <td data-label="Présent">
+                                  <label className="checkbox-row">
+                                    <input
+                                      type="checkbox"
+                                      checked={!!pres}
+                                      onChange={(e) => handleTogglePresence(i.id, e.target.checked)}
+                                    />
+                                  </label>
+                                </td>
+                                <td data-label="">
+                                  <button
+                                    type="button"
+                                    className="btn btn-danger btn-sm"
+                                    onClick={() => handleDeleteInscription(i.id, i.prenom, i.nom)}
+                                  >
+                                    Supprimer
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {toast && <div className="toast">{toast}</div>}
+    </div>
+  );
+}
