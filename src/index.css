@@ -300,3 +300,134 @@ footer { text-align: center; padding: 20px; color: var(--text-muted); font-size:
   }
   .table-responsive td:empty::before { content: none; }
 }
+/* ----------------------------------------------------------------------
+   Fenêtre d'inscription (SignupModal) — fond bien opaque, pour que la page
+   derrière ne se voie plus en transparence par-dessus le formulaire sur
+   téléphone (c'était le souci remonté : lecture illisible sur mobile).
+---------------------------------------------------------------------- */
+.modal-backdrop {
+  position: fixed !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  z-index: 1000 !important;
+  background: rgba(15, 23, 42, 0.6) !important;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 24px 14px;
+}
+
+.modal {
+  position: relative;
+  background: var(--surface) !important;
+  opacity: 1 !important;
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  width: 100%;
+  max-width: 480px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 24px;
+  margin: auto 0;
+}
+
+@media (max-width: 680px) {
+  .modal-backdrop { padding: 0; align-items: flex-end; }
+  .modal {
+    max-width: none;
+    width: 100%;
+    max-height: 92vh;
+    border-radius: 16px 16px 0 0;
+    margin: 0;
+    padding: 20px 16px 28px;
+  }
+}
+
+/* Liste des postes dans le formulaire d'inscription : une carte par poste
+   au lieu d'une case + texte sur une seule ligne, plus lisible sur petit
+   écran. */
+.postes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.poste-choice {
+  align-items: flex-start !important;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.poste-choice-text {
+  display: block;
+  line-height: 1.35;
+}
+
+/* ----------------------------------------------------------------------
+   Champ de recherche "Se rattacher à un adhérent" (AdherentPicker)
+---------------------------------------------------------------------- */
+.adherent-picker {
+  position: relative;
+}
+.adherent-picker-input-wrap {
+  position: relative;
+}
+.adherent-picker-clear {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  border: none;
+  background: none;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+}
+.adherent-picker-list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.adherent-picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  min-height: 44px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.adherent-picker-item:last-child { border-bottom: none; }
+.adherent-picker-item:hover,
+.adherent-picker-item:focus {
+  background: var(--accent-tint);
+}
+.adherent-picker-empty {
+  padding: 12px;
+  font-size: .85rem;
+  color: var(--text-muted);
+}
