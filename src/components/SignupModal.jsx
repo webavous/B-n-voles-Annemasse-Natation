@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { fmtDateRange, NIVEAUX_OFFICIELS, posteCreneauLabel, posteCreneauKey } from "../lib/format";
+import AdherentPicker from "./AdherentPicker.jsx";
 
 export default function SignupModal({
   event,
@@ -23,14 +24,18 @@ export default function SignupModal({
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
 
-  const adherentsByGroupe = useMemo(() => {
-    const map = {};
-    (adherents || []).forEach((a) => {
-      const g = a.groupe || "Autre";
-      (map[g] = map[g] || []).push(a);
-    });
-    return map;
-  }, [adherents]);
+  // Empêche la page de fond de défiler pendant que la fenêtre d'inscription
+  // est ouverte — sans ça, sur téléphone (notamment dans les navigateurs
+  // intégrés comme celui de l'appli Mail), le contenu de la page derrière
+  // peut se voir en transparence par-dessus le formulaire et rend la
+  // lecture illisible.
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, []);
 
   const anyAvailable = !postes.length || postes.some((p) => p.places_restantes > 0);
 
@@ -198,28 +203,30 @@ export default function SignupModal({
               {postes.length > 0 && (
                 <div className="field">
                   <label>Poste(s) souhaité(s) * — un seul par créneau (vous pouvez en choisir un le matin, un l'après-midi, un le soir…)</label>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div className="postes-list">
                     {postes.map((p) => {
                       const creneau = posteCreneauLabel(p);
                       const full = p.places_restantes <= 0;
                       const label = creneau ? `${creneau} — ${p.nom}` : p.nom;
                       return (
-                        <label key={p.id} className="checkbox-row" style={{ opacity: full ? 0.55 : 1 }}>
+                        <label key={p.id} className="checkbox-row poste-choice" style={{ opacity: full ? 0.55 : 1 }}>
                           <input
                             type="checkbox"
                             checked={posteIds.includes(p.id)}
                             disabled={full}
                             onChange={() => togglePoste(p)}
                           />
-                          {label}{" "}
-                          <span className="muted" style={{ fontSize: ".78rem" }}>
-                            (
-                            {full
-                              ? "complet"
-                              : `${p.places_restantes} place${p.places_restantes > 1 ? "s" : ""} restante${
-                                  p.places_restantes > 1 ? "s" : ""
-                                }`}
-                            )
+                          <span className="poste-choice-text">
+                            {label}{" "}
+                            <span className="muted" style={{ fontSize: ".78rem" }}>
+                              (
+                              {full
+                                ? "complet"
+                                : `${p.places_restantes} place${p.places_restantes > 1 ? "s" : ""} restante${
+                                    p.places_restantes > 1 ? "s" : ""
+                                  }`}
+                              )
+                            </span>
                           </span>
                         </label>
                       );
@@ -229,18 +236,7 @@ export default function SignupModal({
               )}
               <div className="field">
                 <label>Se rattacher à un adhérent du club *</label>
-                <select value={adherentId} onChange={(e) => setAdherentId(e.target.value)} required>
-                  <option value="">— Sélectionner —</option>
-                  {Object.entries(adherentsByGroupe).map(([groupe, list]) => (
-                    <optgroup key={groupe} label={groupe}>
-                      {list.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.prenom} {a.nom}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
+                <AdherentPicker adherents={adherents} value={adherentId} onChange={setAdherentId} required />
               </div>
               {error && <p className="error-text">{error}</p>}
               <button type="submit" className="btn btn-primary" style={{ width: "100%", marginTop: 6 }} disabled={submitting}>
