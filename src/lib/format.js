@@ -96,3 +96,12 @@ export function categorieLabel(categorie) {
 // Niveaux/rôles d'officiel proposés dans le formulaire d'inscription pour
 // les compétitions départementales — une personne peut en cocher plusieurs.
 export const NIVEAUX_OFFICIELS = ["Chronométreur", "Juge de virage", "Juge de nage", "Stagiaire"];
+
+// Normalise une chaîne pour une recherche insensible aux accents et à la
+// casse (ex. "Élise" et "elise" doivent se trouver mutuellement).
+export function normalizeSearch(str) {
+  return (str || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+}
